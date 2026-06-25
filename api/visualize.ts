@@ -1,5 +1,26 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { pollKieTask, uploadToTmpFiles } from "./_shared";
+
+async function uploadToTmpFiles(base64Data: string, mimeType: string): Promise<string> {
+  const ext = mimeType.includes("png") ? "png" : "jpg";
+  const buffer = Buffer.from(base64Data, "base64");
+  const blob = new Blob([buffer], { type: mimeType });
+
+  const formData = new FormData();
+  formData.append("file", blob, `image.${ext}`);
+
+  const response = await fetch("https://tmpfiles.org/api/v1/upload", {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to upload to tmpfiles.org (${response.status})`);
+  }
+
+  const result: any = await response.json();
+  const url: string = result.data?.url || "";
+  return url.replace("tmpfiles.org/", "tmpfiles.org/dl/");
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -30,23 +51,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 Scene: ${prompt || "clean studio photography, professional product mockup, soft natural lighting, subtle shadows"}.`;
 
-    const payload = {
-      model: "gpt-image-2-image-to-image",
-      input: {
-        prompt: promptText,
-        input_urls: [imageUrl],
-        aspect_ratio: "auto",
-        resolution: "1K",
-      },
-    };
-
     const response = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        model: "gpt-image-2-image-to-image",
+        input: {
+          prompt: promptText,
+          input_urls: [imageUrl],
+          aspect_ratio: "auto",
+          resolution: "1K",
+        },
+      }),
     });
 
     if (!response.ok) {
@@ -60,8 +79,7 @@ Scene: ${prompt || "clean studio photography, professional product mockup, soft 
       throw new Error("No taskId returned from Kie AI.");
     }
 
-    const imageResult = await pollKieTask(apiKey, taskId, "gpt-image-2");
-    res.json(imageResult);
+    res.json({ taskId });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to visualize product mockup" });
   }

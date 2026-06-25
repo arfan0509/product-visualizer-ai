@@ -5,6 +5,17 @@ import VisualizationPortal from "./components/VisualizationPortal";
 import MockupShowcase from "./components/MockupShowcase";
 import { Product, Visualization, MARKETING_MEDIUMS } from "./types";
 
+async function pollForResult(taskId: string): Promise<{ image: string; feedback: string }> {
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 3000));
+    const res = await fetch(`/api/poll?taskId=${taskId}`);
+    const data = await res.json();
+    if (data.status === "success") return { image: data.image, feedback: "Generated successfully using Kie AI" };
+    if (data.status === "error") throw new Error(data.error);
+  }
+  throw new Error("Generation timed out.");
+}
+
 export default function App() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [visualizations, setVisualizations] = useState<Visualization[]>([]);
@@ -82,16 +93,23 @@ export default function App() {
           throw new Error(data.error || "Failed to generate mockup");
         }
 
+        let result: { image: string; feedback: string };
+        if (data.taskId) {
+          result = await pollForResult(data.taskId);
+        } else {
+          result = { image: data.image, feedback: data.feedback || "Generated successfully" };
+        }
+
         setVisualizations((prev) =>
           prev.map((v) =>
             v.id === item.id
-              ? { ...v, status: "success", image: data.image, feedback: data.feedback }
+              ? { ...v, status: "success", image: result.image, feedback: result.feedback }
               : v
           )
         );
       } catch (error: any) {
         console.error(`Error visualizing ${item.mediumName}:`, error);
-        
+
         setVisualizations((prev) =>
           prev.map((v) =>
             v.id === item.id
@@ -133,10 +151,17 @@ export default function App() {
         throw new Error(data.error || "Failed to generate mockup");
       }
 
+      let result: { image: string; feedback: string };
+      if (data.taskId) {
+        result = await pollForResult(data.taskId);
+      } else {
+        result = { image: data.image, feedback: data.feedback || "Generated successfully" };
+      }
+
       setVisualizations((prev) =>
         prev.map((v) =>
           v.id === id
-            ? { ...v, status: "success", image: data.image, feedback: data.feedback }
+            ? { ...v, status: "success", image: result.image, feedback: result.feedback }
             : v
         )
       );

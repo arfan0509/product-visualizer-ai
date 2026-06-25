@@ -81,6 +81,17 @@ export default function ProductCreator({ onProductSelected, selectedProduct }: P
     }
   };
 
+  const pollForResult = async (taskId: string): Promise<string> => {
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const res = await fetch(`/api/poll?taskId=${taskId}`);
+      const data = await res.json();
+      if (data.status === "success") return data.image;
+      if (data.status === "error") throw new Error(data.error);
+    }
+    throw new Error("Generation timed out.");
+  };
+
   const generateProductDesign = async (promptText: string, nameLabel: string) => {
     setIsGenerating(true);
     setError(null);
@@ -88,9 +99,7 @@ export default function ProductCreator({ onProductSelected, selectedProduct }: P
       const response = await fetch("/api/generate-product", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: promptText
-        })
+        body: JSON.stringify({ prompt: promptText })
       });
 
       const data = await response.json();
@@ -98,12 +107,12 @@ export default function ProductCreator({ onProductSelected, selectedProduct }: P
         throw new Error(data.error || "Failed to generate design");
       }
 
-      onProductSelected({
-        name: nameLabel,
-        image: data.image,
-        type: "ai-generated",
-        prompt: promptText
-      });
+      if (data.taskId) {
+        const image = await pollForResult(data.taskId);
+        onProductSelected({ name: nameLabel, image, type: "ai-generated", prompt: promptText });
+      } else if (data.image) {
+        onProductSelected({ name: nameLabel, image: data.image, type: "ai-generated", prompt: promptText });
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "An unexpected error occurred while generating the design.");

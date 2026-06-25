@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { pollKieTask } from "./_shared";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -21,21 +20,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 Style: ${style || "isolated on a pristine, crisp, solid white studio background, flat front-on angle, professional commercial photography, ultra high detail, clean branding layout"}.
 Important: Make the design bold, distinct, and clear so it can be extracted and placed on other products. No shadows cutting off the label, and no hands holding the product.`;
 
-    const payload = {
-      model: "z-image",
-      input: {
-        prompt: finalPrompt,
-        aspect_ratio: "1:1",
-      },
-    };
-
     const response = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        model: "z-image",
+        input: { prompt: finalPrompt, aspect_ratio: "1:1" },
+      }),
     });
 
     if (!response.ok) {
@@ -49,8 +43,7 @@ Important: Make the design bold, distinct, and clear so it can be extracted and 
       throw new Error("No taskId returned from Kie AI.");
     }
 
-    const imageResult = await pollKieTask(apiKey, taskId, "z-image");
-    res.json(imageResult);
+    res.json({ taskId });
   } catch (error: any) {
     res.status(500).json({ error: error.message || "Failed to generate product" });
   }
